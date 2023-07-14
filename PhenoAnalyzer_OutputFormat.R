@@ -42,6 +42,9 @@ bravo.pheno1 <- bravo.pheno1 %>%
          crust = case_when(ROI %in% c("01","02","03","04","05","06","07","08","09","10","11","12") ~ "Cyano",
                            TRUE ~ "Lichen"))
 
+# list all the index options
+levels(bravo.pheno1$index)
+
 # graph GCC 
 bravo.pheno1 %>%
   filter(index=="pctG")%>%
