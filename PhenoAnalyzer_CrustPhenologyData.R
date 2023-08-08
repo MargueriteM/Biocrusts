@@ -4,7 +4,7 @@
 # Advised by: Nicole Pietrasiak and Marguerite Mauritz
 # Script: 
 # 14 July 2023
-# Marguerite Mauritz
+# Marguerite Mauritz and Mikaela Hoellrich
 
 library(ggplot2)
 library(dplyr)
