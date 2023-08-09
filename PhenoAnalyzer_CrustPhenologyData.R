@@ -195,6 +195,11 @@ pheno_all_filter %>%
 
 # mark images to exclude based on criteria
 # Use Hue to remove outlying points
+# CUrrently not WORKING, NEED TO FIND SOURCE OF ERROR
+
+# ! Problem while computing `m = purrr::map(data, loess, formula = value ~ datetime, span = 0.5)`.
+# Caused by error in `simpleLoess()`:
+#   ! NA/NaN/Inf in foreign function call (arg 2)
 
 # https://stackoverflow.com/questions/50163106/loess-regression-on-each-group-with-dplyrgroup-by
 models <- pheno_all_filter %>%
