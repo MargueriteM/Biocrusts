@@ -194,7 +194,57 @@ pheno_all_filter %>%
   labs(y="Saturation")
 
 # mark images to exclude based on criteria
-# CHECK CODE FOR FITTING FUNCTIONS
+# Use Hue to remove outlying points
+
+# https://stackoverflow.com/questions/50163106/loess-regression-on-each-group-with-dplyrgroup-by
+models <- pheno_all_filter %>%
+  filter(index=="Hue" ) %>%
+  tidyr::nest(camera, Sample) %>%
+  dplyr::mutate(
+    # Perform loess calculation on each CpG group
+    m = purrr::map(data, loess,
+                   formula = value ~ datetime, span = .5),
+    # Retrieve the fitted values from each model
+    fitted = purrr::map(m, `[[`, "fitted")
+  )
+
+# Apply fitted y's as a new column
+results <- models %>%
+  dplyr::select(-m) %>%
+  tidyr::unnest()
+
+# Plot with loess line for each group
+ggplot(results, aes(x = AVGMOrder, y = Meth, group = CpG, colour = CpG)) +
+  geom_point() +
+  geom_line(aes(y = fitted))
+
+# fit a straight line to all light curves
+loess.test <- pheno_all_filter %>%
+  filter(index=="Hue" ) %>%
+  group_by(camera, Sample) %>%
+  do(broom::tidy(loess(value~datetime,data=.)))
+
+# extract only intercept and slope parameters and put in wide format
+lc.lm.long <- lc.lm %>%
+  select(LcNo,term,estimate)%>%
+  pivot_wider(id_cols=LcNo,names_from=term,values_from = estimate,
+              names_prefix="lm.")
+
+# # get residuals
+# lc.lm.resid <- dat.filter2 %>%
+#   group_by(LcNo) %>%
+#   do(broom::augment(lm(ETR~PAR,.)))
+
+
+# combine the linear check (only the LcNo, lm.PAR, and lm.(Intercept)) with data
+linear.check <- merge(lc.lm.long,lcno.filter2, by="LcNo")
+
+# and add residuals (to see if that can remove spiky curves)
+dat.filter4 <- linear.check %>% 
+  select(LcNo,lm.PAR,`lm.(Intercept)`) %>%
+  left_join(dat.filter3,by="LcNo") 
+
+
 loess.test <- pheno_all_filter %>%
   filter(index=="Hue") %>%
   group_by(camera, Sample) %>%
