@@ -218,7 +218,7 @@ hue_filter <- hue_filter %>%
 hue_filter %>%
   ggplot(., aes(x=datetime))+
   geom_point(aes(y=value,color=camera),size=0.5)+
-  geom_point(aes(y=Hue_med,color=camera),size=0.5,colour="black")+
+  geom_line(aes(y=Hue_med, colour=camera),linewidth=0.7, colour="black")+
   facet_wrap(Sample~.)+
   labs(y="Hue")
 
@@ -317,7 +317,7 @@ pheno_all_filter1 %>%
 # calculate mean by site and crust type
 gcc.mean <- pheno_all_filter1 %>%
   filter(index=="pctG" & missing_filter == "keep") %>%
-  group_by(datetime,Site, Type)%>%
+  group_by(date,Site, Type)%>%
   summarise(gcc.mean = mean(value, na.rm=TRUE),
             gcc.sd = sd(value, na.rm=TRUE), 
             n = n(),
@@ -325,9 +325,10 @@ gcc.mean <- pheno_all_filter1 %>%
   mutate(Type = factor(Type, levels=c("L","D","P","C")))
 
 # graph means
-ggplot(gcc.mean, aes(datetime, gcc.mean, colour=Type))+
+ggplot(gcc.mean, aes(date, gcc.mean, colour=Type))+
   geom_point(size=0.5)+
-  #geom_line(line_width=0.3)+
+  geom_line(linewidth=0.3)+
   geom_errorbar(aes(ymin=gcc.mean-gcc.se, ymax=gcc.mean+gcc.se))+
+  scale_x_date(date_breaks="5 days", date_minor_breaks = "1 day",date_labels= "%b %d")+
   facet_grid(Site~Type)+
   labs(y="mean GCC")
