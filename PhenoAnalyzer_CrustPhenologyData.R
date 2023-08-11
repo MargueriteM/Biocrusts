@@ -56,7 +56,7 @@ pheno_all<- pheno_all %>%
   separate(time,c("hour","minute"),sep="\\.", extra = "drop", fill = "left", remove=TRUE) %>%
   mutate(date = as.Date(paste(year, month, day, sep="-")),
          time = paste(hour,minute,sep=":"),
-         datetime = as.POSIXct(paste(date, time, sep=" ")))
+         datetime = as.POSIXct(paste(date, time, sep=" "),tz="UTC"))
 
 
 # checks
@@ -86,12 +86,31 @@ TK <- TK %>%
 W<- read_xlsx("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/PhenoWaterTrack.xlsx",
               sheet = "in")
 
-# format watering date sheet for merging
-# corrected typo in DateTime_yyyymmdd_hhmm column in original sheet
-# 202030424 to 20230424
-W <- W %>%
+# format watering data sheet: 
+# change Number to Sample
+# drop 'thickness' columns
+# make long to calculate sample weight without tin
+W.long <- W %>%
   rename(Sample=Number)%>%
-  mutate(date_time = ymd_hm(DateTime_yyyymmdd_hhmm))
+  select(!starts_with("Thickness"))%>%
+  pivot_longer(cols=!(c(Sample, SampleID, Site, Type, Water, Rep, TinWeight)), names_to="Weight_day_time", values_to="SampleTin_mass_g")%>%
+  mutate(Sample_mass_g = SampleTin_mass_g-TinWeight)
+
+# read data on sample thickness
+Thick<- read_xlsx("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/CrustThickness.xlsx")
+
+# format to long
+# calculate mean thickness per sample
+Thick <- Thick %>%
+  rename(Sample=Number)%>%
+  pivot_longer(cols=!(c(Sample, SampleID, Site, Type, Water, Rep)), names_to="ThicknessRep", values_to="Thickness_mm")%>%
+  group_by(Sample, SampleID, Site, Type, Water, Rep)%>%
+  summarise(Thickness_mean = mean(Thickness_mm))%>%
+  mutate(Type = factor(Type, levels=c("L","D","P","C")))
+
+# graph thickness by crust type and site
+ggplot(Thick, aes(Site,Thickness_mean,fill=Type))+
+  geom_boxplot()
  
 # import image lists for caps on/off amd no crusts in picture
 img_notes<- read.csv("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/PiCam/Pictures ABC/PhotoLists/Photolist_ALL.csv")
@@ -132,7 +151,7 @@ ggplot(pheno_all, aes(camera, Sample))+
 
 # plot pctG by date and Sample number colored by camera
 pheno_all %>%
-  filter(index=="pctG") %>%
+  filter(index=="pctG", Sample %in% c(7,6,8,9,10,11,12,13,14,15,16,17,18,19)) %>%
 ggplot(., aes(datetime, value, color=camera))+
   geom_point()+
   facet_wrap(Sample~.)+
@@ -150,6 +169,11 @@ pheno_all %>%
 # exclude data when Use==0
 pheno_all_filter <- pheno_all%>%
   filter(Use==1)
+
+# alpha start time >= 14:20 on April 6th 
+# bravo start time >= 12:40 on April 6th 
+# charlie start time >= 12:40 on April 6th 
+
 
 # explore indices for filtering times with no sample in camera view
 pheno_all_filter %>%
@@ -178,7 +202,7 @@ pheno_all_filter %>%
   labs(y="percent red")
 
 pheno_all_filter %>%
-  filter(index=="Hue") %>%
+  filter(index=="Hue" & datetime>= ymd_hms("2023-04-06 14:20:00")) %>%
   ggplot(., aes(datetime, value, color=camera))+
   geom_point(size=0.5)+
   geom_smooth(method="loess")+
