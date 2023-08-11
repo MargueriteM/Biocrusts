@@ -151,7 +151,7 @@ ggplot(pheno_all, aes(camera, Sample))+
 
 # plot pctG by date and Sample number colored by camera
 pheno_all %>%
-  filter(index=="pctG", Sample %in% c(7,6,8,9,10,11,12,13,14,15,16,17,18,19)) %>%
+  filter(index=="pctG") %>%
 ggplot(., aes(datetime, value, color=camera))+
   geom_point()+
   facet_wrap(Sample~.)+
@@ -170,39 +170,22 @@ pheno_all %>%
 pheno_all_filter <- pheno_all%>%
   filter(Use==1)
 
+# times when all samples were positioned in frame, at the begining
 # alpha start time >= 14:20 on April 6th 
 # bravo start time >= 12:40 on April 6th 
 # charlie start time >= 12:40 on April 6th 
 
+# and exclude data before all dishes are in the field of view
+pheno_all_filter <- pheno_all_filter %>% 
+  mutate(missing_filter = (case_when(camera == "alpha" & datetime < ymd_hms("2023-04-06 14:20:00") ~ "remove",
+                                   camera == "bravo" & datetime < ymd_hms("2023-04-06 12:40:00") ~ "remove",
+                                   camera == "charlie" & datetime < ymd_hms("2023-04-06 12:40:00") ~"remove",
+                         TRUE ~ "keep")))
 
-# explore indices for filtering times with no sample in camera view
-pheno_all_filter %>%
-  filter(index=="greenDN") %>%
-  ggplot(., aes(datetime, value, color=camera))+
-  geom_point(size=0.5)+
-  geom_line()+
-  facet_wrap(Sample~.)+
-  labs(y="Green DN")
-
+# Hue maybe best index for filtering times with no sample in camera view
 
 pheno_all_filter %>%
-  filter(index=="pctG") %>%
-  ggplot(., aes(datetime, value, color=camera))+
-  geom_point(size=0.5)+
-  geom_line()+
-  facet_wrap(Sample~.)+
-  labs(y="percent green")
-
-pheno_all_filter %>%
-  filter(index=="pctR") %>%
-  ggplot(., aes(datetime, value, color=camera))+
-  geom_point(size=0.5)+
-  geom_line()+
-  facet_wrap(Sample~.)+
-  labs(y="percent red")
-
-pheno_all_filter %>%
-  filter(index=="Hue" & datetime>= ymd_hms("2023-04-06 14:20:00")) %>%
+  filter(index=="Hue" ) %>%
   ggplot(., aes(datetime, value, color=camera))+
   geom_point(size=0.5)+
   geom_smooth(method="loess")+
@@ -210,78 +193,120 @@ pheno_all_filter %>%
   labs(y="Hue")
 
 pheno_all_filter %>%
-  filter(index=="Saturation") %>%
-  ggplot(., aes(datetime, value, color=camera))+
+  filter(index=="Hue" ) %>%
+  ggplot(., aes(factor(date), value, color=missing_filter))+
   geom_point(size=0.5)+
-  geom_line()+
   facet_wrap(Sample~.)+
-  labs(y="Saturation")
+  labs(y="Hue")
+
+
+# calculate median of Hue
+hue_median <- pheno_all_filter %>%
+  filter(index=="Hue" & missing_filter=="keep") %>%
+  group_by(date,camera,Sample)%>%
+  summarise(Hue_med = median(value))
+
+# join back to hue median to all data with Hue only
+hue_filter<-inner_join(pheno_all_filter%>%filter(index=="Hue")%>%select(date,datetime,camera,Sample,value,missing_filter),hue_median, by=c("date", "camera", "Sample"))
+
+# calculate the distance from median
+hue_filter <- hue_filter %>%
+  mutate(dist_med = value-Hue_med)
+
+
+# graph hue with daily median
+hue_filter %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=camera),size=0.5)+
+  geom_point(aes(y=Hue_med,color=camera),size=0.5,colour="black")+
+  facet_wrap(Sample~.)+
+  labs(y="Hue")
+
+
+# graph distance from median as timeseries
+hue_filter %>%
+  filter(Sample <= 25 ) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=dist_med,color=camera),size=0.5,colour="black")+
+  geom_hline(yintercept=c(-0.1,0.1))+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
+
+hue_filter %>%
+  filter(Sample>25 & Sample <=50) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=dist_med,color=camera),size=0.5,colour="black")+
+  geom_hline(yintercept=c(-0.1,0.1))+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
+
+hue_filter %>%
+  filter(Sample>50 ) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=dist_med,color=camera),size=0.5,colour="black")+
+  geom_hline(yintercept=c(-0.1,0.1))+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
+
+hue_filter %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=dist_med,color=camera),size=0.5)+
+  geom_hline(yintercept=c(-0.1,0.1))+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
 
 # mark images to exclude based on criteria
 # Use Hue to remove outlying points
-# CUrrently not WORKING, NEED TO FIND SOURCE OF ERROR
+hue_filter <- hue_filter %>%
+  mutate(missing_filter = case_when(missing_filter == "remove" ~ "remove",
+                                    dist_med < -0.1 | dist_med > 0.1 ~ "remove",
+                                    TRUE ~ "keep"))
 
-# ! Problem while computing `m = purrr::map(data, loess, formula = value ~ datetime, span = 0.5)`.
-# Caused by error in `simpleLoess()`:
-#   ! NA/NaN/Inf in foreign function call (arg 2)
+# graph points marked for removal
+hue_filter %>%
+  filter(Sample<=25) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="Huen")
 
-# https://stackoverflow.com/questions/50163106/loess-regression-on-each-group-with-dplyrgroup-by
-models <- pheno_all_filter %>%
-  filter(index=="Hue" ) %>%
-  tidyr::nest(camera, Sample) %>%
-  dplyr::mutate(
-    # Perform loess calculation on each CpG group
-    m = purrr::map(data, loess,
-                   formula = value ~ datetime, span = .5),
-    # Retrieve the fitted values from each model
-    fitted = purrr::map(m, `[[`, "fitted")
-  )
+hue_filter %>%
+  filter(Sample>25 & Sample <=50) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
 
-# Apply fitted y's as a new column
-results <- models %>%
-  dplyr::select(-m) %>%
-  tidyr::unnest()
+hue_filter %>%
+  filter(Sample>50 ) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
 
-# Plot with loess line for each group
-ggplot(results, aes(x = AVGMOrder, y = Meth, group = CpG, colour = CpG)) +
-  geom_point() +
-  geom_line(aes(y = fitted))
+# merge hue filter back to whole data set 
+pheno_all_filter1<-inner_join(pheno_all_filter %>% select(!missing_filter),hue_filter %>% select(!value), by=c("date", "datetime", "camera", "Sample"))
 
-# fit a straight line to all light curves
-loess.test <- pheno_all_filter %>%
-  filter(index=="Hue" ) %>%
-  group_by(camera, Sample) %>%
-  do(broom::tidy(loess(value~datetime,data=.)))
-
-# extract only intercept and slope parameters and put in wide format
-lc.lm.long <- lc.lm %>%
-  select(LcNo,term,estimate)%>%
-  pivot_wider(id_cols=LcNo,names_from=term,values_from = estimate,
-              names_prefix="lm.")
-
-# # get residuals
-# lc.lm.resid <- dat.filter2 %>%
-#   group_by(LcNo) %>%
-#   do(broom::augment(lm(ETR~PAR,.)))
-
-
-# combine the linear check (only the LcNo, lm.PAR, and lm.(Intercept)) with data
-linear.check <- merge(lc.lm.long,lcno.filter2, by="LcNo")
-
-# and add residuals (to see if that can remove spiky curves)
-dat.filter4 <- linear.check %>% 
-  select(LcNo,lm.PAR,`lm.(Intercept)`) %>%
-  left_join(dat.filter3,by="LcNo") 
-
-
-loess.test <- pheno_all_filter %>%
+# graph 
+pheno_all_filter1 %>%
   filter(index=="Hue") %>%
-  group_by(camera, Sample) %>%
-  summarise(loessfx = loess(value~datetime))
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="Hue distance from Median")
 
-# graph by Site and Crust type
-pheno_all %>%
+# graph pctG marked with missing filter
+pheno_all_filter1 %>%
   filter(index=="pctG") %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="GCC with filter")
+
+
+# graph by Site and Crust type with missing filter removed
+pheno_all_filter1 %>%
+  filter(index=="pctG" & missing_filter == "keep") %>%
   ggplot(., aes(datetime, value, color=factor(Sample)))+
   geom_point(size=0.5)+
   geom_line()+
@@ -289,11 +314,20 @@ pheno_all %>%
   labs(y="percent green")
 
 
-pheno_all %>%
-  filter(index=="pctR") %>%
-  ggplot(., aes(datetime, value, color=factor(Sample)))+
-  geom_point(size=0.5)+
-  geom_line()+
-  facet_grid(Site~Type)+
-  labs(y="percent red")
+# calculate mean by site and crust type
+gcc.mean <- pheno_all_filter1 %>%
+  filter(index=="pctG" & missing_filter == "keep") %>%
+  group_by(datetime,Site, Type)%>%
+  summarise(gcc.mean = mean(value, na.rm=TRUE),
+            gcc.sd = sd(value, na.rm=TRUE), 
+            n = n(),
+            gcc.se = gcc.sd/sqrt(n))%>%
+  mutate(Type = factor(Type, levels=c("L","D","P","C")))
 
+# graph means
+ggplot(gcc.mean, aes(datetime, gcc.mean, colour=Type))+
+  geom_point(size=0.5)+
+  #geom_line(line_width=0.3)+
+  geom_errorbar(aes(ymin=gcc.mean-gcc.se, ymax=gcc.mean+gcc.se))+
+  facet_grid(Site~Type)+
+  labs(y="mean GCC")
