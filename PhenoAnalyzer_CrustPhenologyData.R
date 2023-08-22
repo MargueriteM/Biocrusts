@@ -95,25 +95,43 @@ W.long <- W %>%
   select(!starts_with("Thickness"))%>%
   pivot_longer(cols=!(c(Sample, SampleID, Site, Type, Water, Rep, TinWeight)), names_to="Weight_day_time", values_to="SampleTin_mass_g")%>%
   separate(Weight_day_time,c(NA,"date_time"), sep = "Weight.", extra = "merge", fill = "left", remove =FALSE) %>%
-  mutate(Sample_mass_g = SampleTin_mass_g-TinWeight,
+  mutate(WetWeight_g = SampleTin_mass_g-TinWeight,
          date_time=ymd_hm(date_time))
 
+# calculate the difference between sequential water events by day
+W.long <- W.long%>%
+  arrange(Sample)%>%
+  group_by(date(date_time),Sample)%>%
+  mutate(WaterContent=c(NA,diff(WetWeight_g)))
+
 # graph sample weight over time
-ggplot(W.long, aes(date_time, Sample_mass_g, colour=factor(Sample)))+
+ggplot(W.long, aes(date_time, WetWeight_g, colour=factor(Sample)))+
   geom_point()+
   geom_line()+
   facet_grid(Water~Site)
 
-ggplot(W.long, aes(hour(date_time), Sample_mass_g, colour=factor(Sample)))+
+ggplot(W.long, aes(hour(date_time), WetWeight_g, colour=factor(Sample)))+
   geom_point()+
   geom_line()+
   facet_grid(Water~date(date_time))
 
-ggplot(W.long, aes(time_elapsed, Sample_mass_g, colour=factor(Sample)))+
+
+# graph moisture change on days with consecutive measurements
+na.omit(W.long) %>%
+ggplot(., aes(hour(date_time), WaterContent, colour=factor(Sample)))+
   geom_point()+
   geom_line()+
-  facet_grid(Water~Site)
+  facet_grid(Water~date(date_time))+
+  ylim(c(-2,2))
 
+
+# make a box plot of the first weight recorded on 2023-04-11 and 2023-04-18 
+# BUT ... this is total sample weight so if there is a difference in soil weight by treatment,
+# then this isn't a true reflection of water content
+W.long %>%
+  filter(date_time==ymd_hms("2023-04-11 09:00:00")|date_time==ymd_hms("2023-04-18 09:00:00"))%>%
+  ggplot(., aes(factor(date_time), WetWeight_g,fill=Water))+
+  geom_boxplot(width=0.5)
 
 # read data on sample thickness
 Thick<- read_xlsx("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/CrustThickness.xlsx")
