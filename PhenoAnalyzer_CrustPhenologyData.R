@@ -94,7 +94,26 @@ W.long <- W %>%
   rename(Sample=Number)%>%
   select(!starts_with("Thickness"))%>%
   pivot_longer(cols=!(c(Sample, SampleID, Site, Type, Water, Rep, TinWeight)), names_to="Weight_day_time", values_to="SampleTin_mass_g")%>%
-  mutate(Sample_mass_g = SampleTin_mass_g-TinWeight)
+  separate(Weight_day_time,c(NA,"date_time"), sep = "Weight.", extra = "merge", fill = "left", remove =FALSE) %>%
+  mutate(Sample_mass_g = SampleTin_mass_g-TinWeight,
+         date_time=ymd_hm(date_time))
+
+# graph sample weight over time
+ggplot(W.long, aes(date_time, Sample_mass_g, colour=factor(Sample)))+
+  geom_point()+
+  geom_line()+
+  facet_grid(Water~Site)
+
+ggplot(W.long, aes(hour(date_time), Sample_mass_g, colour=factor(Sample)))+
+  geom_point()+
+  geom_line()+
+  facet_grid(Water~date(date_time))
+
+ggplot(W.long, aes(time_elapsed, Sample_mass_g, colour=factor(Sample)))+
+  geom_point()+
+  geom_line()+
+  facet_grid(Water~Site)
+
 
 # read data on sample thickness
 Thick<- read_xlsx("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/CrustThickness.xlsx")
