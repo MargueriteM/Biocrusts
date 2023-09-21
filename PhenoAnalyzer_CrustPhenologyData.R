@@ -375,9 +375,11 @@ ggplot(gcc.mean, aes(date, gcc.mean, colour=Type))+
   geom_point(size=0.5)+
   geom_line(linewidth=0.3)+
   geom_errorbar(aes(ymin=gcc.mean-gcc.se, ymax=gcc.mean+gcc.se))+
+  geom_vline(xintercept=as.Date("2023-04-23"), linetype="dashed", colour="dark grey")+
   scale_x_date(date_breaks="5 days", date_minor_breaks = "1 day",date_labels= "%b %d")+
   facet_grid(.~Site)+
-  labs(y="mean GCC")
+  labs(y="mean GCC")+
+  theme_bw()
 
 # create a dataframe of all points marked for removal to cross-check with photos
 # once with all images and samples and once only per image
