@@ -352,7 +352,7 @@ pheno_all_filter1 %>%
 
 
 # calculate mean by site and crust type
-gcc.mean <- c %>%
+gcc.mean <-pheno_all_filter1 %>%
   filter(index=="pctG" & missing_filter == "keep") %>%
   group_by(date,Site, Type)%>%
   summarise(gcc.mean = mean(value, na.rm=TRUE),
@@ -368,6 +368,15 @@ ggplot(gcc.mean, aes(date, gcc.mean, colour=Type))+
   geom_errorbar(aes(ymin=gcc.mean-gcc.se, ymax=gcc.mean+gcc.se))+
   scale_x_date(date_breaks="5 days", date_minor_breaks = "1 day",date_labels= "%b %d")+
   facet_grid(Site~Type)+
+  labs(y="mean GCC")
+
+# graph means grouped only by site
+ggplot(gcc.mean, aes(date, gcc.mean, colour=Type))+
+  geom_point(size=0.5)+
+  geom_line(linewidth=0.3)+
+  geom_errorbar(aes(ymin=gcc.mean-gcc.se, ymax=gcc.mean+gcc.se))+
+  scale_x_date(date_breaks="5 days", date_minor_breaks = "1 day",date_labels= "%b %d")+
+  facet_grid(.~Site)+
   labs(y="mean GCC")
 
 # create a dataframe of all points marked for removal to cross-check with photos
