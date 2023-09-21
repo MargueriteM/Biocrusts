@@ -305,7 +305,7 @@ hue_filter %>%
   ggplot(., aes(x=datetime))+
   geom_point(aes(y=value,color=missing_filter),size=0.5)+
   facet_wrap(Sample~.)+
-  labs(y="Huen")
+  labs(y="Hue")
 
 hue_filter %>%
   filter(Sample>25 & Sample <=50) %>%
@@ -352,7 +352,7 @@ pheno_all_filter1 %>%
 
 
 # calculate mean by site and crust type
-gcc.mean <- pheno_all_filter1 %>%
+gcc.mean <- c %>%
   filter(index=="pctG" & missing_filter == "keep") %>%
   group_by(date,Site, Type)%>%
   summarise(gcc.mean = mean(value, na.rm=TRUE),
@@ -369,3 +369,13 @@ ggplot(gcc.mean, aes(date, gcc.mean, colour=Type))+
   scale_x_date(date_breaks="5 days", date_minor_breaks = "1 day",date_labels= "%b %d")+
   facet_grid(Site~Type)+
   labs(y="mean GCC")
+
+# create a dataframe of all points marked for removal to cross-check with photos
+# once with all images and samples and once only per image
+pheno_all_remove_Sample <- pheno_all_filter1 %>%
+  filter(missing_filter == "remove") %>%
+  distinct(img,Sample)
+
+pheno_all_remove_img <- pheno_all_filter1 %>%
+  filter(missing_filter == "remove") %>%
+  distinct(img)
