@@ -390,3 +390,10 @@ pheno_all_remove_Sample <- pheno_all_filter1 %>%
 pheno_all_remove_img <- pheno_all_filter1 %>%
   filter(missing_filter == "remove") %>%
   distinct(img)
+
+# save files for further use
+write.table(hue_filter, "ImageFilter_AllCamera.csv",row.names = FALSE, sep=",", dec=".")
+
+
+
+
