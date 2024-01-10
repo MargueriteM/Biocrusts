@@ -77,10 +77,17 @@ camchecks %>%
 TK <- read.csv("PhenoAnaTracking.csv", header=TRUE)
 
 # convert ROI to factor and camera to lower case to match column type in pheno_all
+# make sure that 1-9 are converted to 01-09
 TK <- TK %>%
-  mutate(ROI = as.factor(ROI),
+  mutate(ROI1 = case_when(ROI<10 ~ as.character(paste0("0",ROI))),
+         ROI2 = case_when(ROI>=10 ~ as.character(ROI)),
+         ROI3 = case_when(is.na(ROI1) ~ ROI2,
+                          is.na(ROI2) ~ ROI1),
          camera = tolower(Camera))%>%
-  select(camera, ROI, Sample, SampleID, Site, Type, Water, Rep)
+  select(camera, ROI3, Sample, SampleID, Site, Type, Water, Rep)
+
+TK <- TK %>%
+  rename(ROI=ROI3)
 
 # data on watering dates/times
 W<- read_xlsx("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/PhenoWaterTrack.xlsx",
@@ -212,7 +219,7 @@ pheno_all_filter <- pheno_all%>%
 # bravo start time >= 12:40 on April 6th 
 # charlie start time >= 12:40 on April 6th 
 
-# and exclude data before all dishes are in the field of view
+# and exclude data befΩ¸¸¸ΩΩore all dishes are in the field of view
 pheno_all_filter <- pheno_all_filter %>% 
   mutate(missing_filter = (case_when(camera == "alpha" & datetime < ymd_hms("2023-04-06 14:20:00") ~ "remove",
                                    camera == "bravo" & datetime < ymd_hms("2023-04-06 12:40:00") ~ "remove",
@@ -321,8 +328,53 @@ hue_filter %>%
   facet_wrap(Sample~.)+
   labs(y="Hue distance from Median")
 
-# merge hue filter back to whole data set 
-pheno_all_filter1<-inner_join(pheno_all_filter %>% select(!missing_filter),hue_filter %>% select(!value), by=c("date", "datetime", "camera", "Sample"))
+# merge hue filter  back to whole data set 
+pheno_all_filter1<-full_join(pheno_all_filter%>% select(!missing_filter),hue_filter %>% select(!value), by=c("date", "datetime", "camera", "Sample"))
+
+
+# save hue_filter for manual check of excluded images
+# (does not include ROIs 1-9 due to naming issue with 01-09)
+# write.table(hue_filter, "ImageFilter_AllCamera.csv",row.names = FALSE, sep=",", dec=".")
+
+# import manual check of hue filter
+# (does not include ROIs 1-9 due to naming issue with 01-09)
+hue_filter_check <- read.csv("ImageFilter_AllCamera_BAEdit_VisualImageCheck.csv", header=TRUE)
+
+# create a binary 1/0 variable for missing_filter and dish_present
+# missing_filter: 1= keep, 0=remove
+# dish_present: 1 = yes, 0 = no
+
+hue_filter_check <- hue_filter_check %>%
+  mutate(date = mdy(date),
+         datetime=mdy_hm(datetime),
+         missing_filter_b = case_when(missing_filter == "keep" ~ 1,
+                                      missing_filter == "remove" ~ 0),
+         dish_present_b = case_when(dish_present == "yes" ~ 1,
+                                    dish_present == "no" ~ 0)) 
+
+# count the number of times for keep/yes, keep/no, remove/yes, remove/no
+hue_filter_check_count <-  hue_filter_check %>% 
+  group_by(missing_filter, dish_present) %>% 
+  summarise(number = n()) 
+
+
+# graph the count of when dish is present and filter says 'keep'
+hue_filter_check %>%
+  filter(missing_filter == "keep")%>%
+ggplot(., aes(dish_present))+
+  labs(title="Hue Filter = KEEP ")+
+  geom_bar()
+
+# graph the count of when dish is present/absent and filter says 'remove'
+hue_filter_check %>%
+  filter(missing_filter == "remove")%>%
+  ggplot(., aes(dish_present))+
+  labs(title="Hue Filter = REMOVE ")+
+  geom_bar()
+
+
+# merge all pheno data with manual dish present notes back to whole data set 
+pheno_all_filter1<-full_join(pheno_all_filter1,hue_filter_check %>% select(!c(value,missing_filter)), by=c("date", "datetime", "camera", "Sample"))
 
 # graph 
 pheno_all_filter1 %>%
@@ -340,6 +392,25 @@ pheno_all_filter1 %>%
   facet_wrap(Sample~.)+
   labs(y="GCC with filter")
 
+# graph pctG marked with dish present yes/no
+pheno_all_filter1 %>%
+  filter(index=="pctG") %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=dish_present),size=0.5)+
+  facet_wrap(Sample~.)+
+  labs(y="GCC with filter")
+
+# graph pctG facetted with dish present yes/no and in sample groups
+# in general those marked remove should have no dish present, those marked keep should have dish present
+pheno_all_filter1 %>%
+  filter(index=="pctG"&Sample>=81 & Sample<=100) %>%
+  ggplot(., aes(x=datetime))+
+  geom_point(aes(y=value,color=missing_filter,shape=dish_present),size=0.5)+
+  facet_grid(.~Sample)+
+  scale_color_manual(values=c("black","orange"))+
+  scale_shape_manual(values=c(3,20))+
+  labs(y="GCC with filter")+
+  theme_bw()
 
 # graph by Site and Crust type with missing filter removed
 pheno_all_filter1 %>%
@@ -390,9 +461,6 @@ pheno_all_remove_Sample <- pheno_all_filter1 %>%
 pheno_all_remove_img <- pheno_all_filter1 %>%
   filter(missing_filter == "remove") %>%
   distinct(img)
-
-# save files for further use
-write.table(hue_filter, "ImageFilter_AllCamera.csv",row.names = FALSE, sep=",", dec=".")
 
 
 
