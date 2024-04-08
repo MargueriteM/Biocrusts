@@ -11,6 +11,7 @@ library(dplyr)
 library(tidyr)
 library(readxl)
 library(lubridate)
+library(plotly)
 
 setwd("/Users/memauritz/Library/CloudStorage/OneDrive-UniversityofTexasatElPaso/Biocrust_Phenology/Experimental Data/PhenoAnalyzer")
 
@@ -269,7 +270,7 @@ hue_filter %>%
 
 # graph distance from median as timeseries
 hue_filter %>%
-  filter(Sample <= 25 ) %>%
+  filter(Sample >= 51 & Sample <=75 ) %>%
   ggplot(., aes(x=datetime))+
   geom_point(aes(y=dist_med,color=camera),size=0.5,colour="black")+
   geom_hline(yintercept=c(-0.1,0.1))+
@@ -403,28 +404,91 @@ pheno_all_filter1 %>%
 # graph pctG facetted with dish present yes/no and in sample groups
 # in general those marked remove should have no dish present, those marked keep should have dish present
 pheno_all_filter1 %>%
-  filter(index=="pctG"&Sample>=81 & Sample<=100) %>%
+  filter(index=="pctG"&Sample>=51 & Sample<=75) %>%
   ggplot(., aes(x=datetime))+
   geom_point(aes(y=value,color=missing_filter,shape=dish_present),size=0.5)+
-  facet_grid(.~Sample)+
+  facet_wrap(.~Sample)+
   scale_color_manual(values=c("black","orange"))+
   scale_shape_manual(values=c(3,20))+
   labs(y="GCC with filter")+
   theme_bw()
 
+# some outliers remain. Graph with plotly to identify & check
+ggplotly(pheno_all_filter1 %>%
+              filter(index=="pctG" & missing_filter == "keep") %>%
+              ggplot(., aes(datetime, value, color=factor(Sample)))+
+              geom_point(size=0.5)+
+              geom_line()+
+              facet_grid(Site~Type)+
+              labs(y="percent green"))
+ 
+# based on Hue:
+# sample 98 on 2023-04-06 15:00 and 2023-04-07 10:00-15:00
+# sample 82 2023-04-24
+# sample 75 2023-04-23 and 2024-04-24
+# sample 76 2023-04-23 and 2024-04-24
+
+# based on pctG
+# * Sample 91 2023-04-08 10:00 (alpha): all dishes missing at 10:00 and most at 11:00 
+# *sample 16 2024-04-09 10:00, 2023-04-23 10:00 ( bravo ROI 38, charlie ROI 30; issue is in bravo). No dishes present until 12:00 for 4-09 and 4-24 has no dishes unitl 11:00 and a hand at 11:00
+# *sample 20 2024-04-09 10:00, 2023-04-24 10:00: no dishes present at both times, 04-24 has no dishes until 11:00
+# *48 2023-04-14 10:00 and 2023-04-16 10:00 and 2023-04-21 10:00 (bravo and charlie): 04-14, 04-16, 04-21 no dishes until 12:00
+# Add notes for all dishes missing to Photolist_All for manual filtering *
+
+# manually edit filter to "remove" for 
+# ** sample 97 on 2023-04-06 14:40, and 2023-04-07 10:00-15:00 (alpha ): don't filter, dish present! 
+# sample 98 on 2023-04-06 14:20, 14:40, 15:00 and 2023-04-07 10:00-15:00 (alpha ROI 1): no dish present! 
+# sample 98 on 2023-04-06 15:00 and 2023-04-07 10:00-15:00 (alpha ROI 1): no dish present! 
+# sample 94 on 2023-04-24 15:00 (alpha): no dish present!
+# 73 04-23 13:00 (alpha): no dish present!
+# 69 04-24 12:00 (alpha): no dish present! 
+# 64 2024-04-24 10:00 (alpha): no dish present
+# 62 2024-04-23 11:00 (alpha): no dish present
+pheno_all_filter1 <- pheno_all_filter1 %>%
+  mutate(filter_manual = case_when(datetime == ymd_hms("2023-04-06 14:20:00") & Sample==98 ~ "remove",
+                                   datetime == ymd_hms("2023-04-06 14:40:00") & Sample==98 ~ "remove",
+                                   datetime == ymd_hms("2023-04-06 15:00:00") & Sample==98 ~ "remove",
+                                   datetime >= ymd_hms("2023-04-07 10:00:00") & datetime <= ymd_hms("2023-04-07 15:00:00") & Sample==98 ~ "remove",
+                                   datetime == ymd_hms("2023-04-24 15:00:00") & Sample==94 ~ "remove",
+                                   datetime == ymd_hms("2023-04-23 13:00:00") & Sample==73 ~ "remove",
+                                   datetime == ymd_hms("2023-04-24 12:00:00") & Sample==69 ~ "remove",
+                                   datetime == ymd_hms("2023-04-24 10:00:00") & Sample==64 ~ "remove",
+                                   datetime == ymd_hms("2023-04-23 11:00:00") & Sample==62 ~ "remove",
+                                   #datetime == ymd_hms("2023-04-08 10:00:00") & camera=="alpha" ~ "remove",#added to TK notes
+                                   #datetime == ymd_hms("2023-04-08 11:00:00") & camera=="alpha" ~ "remove", #added to TK notes
+         TRUE ~ "keep"))
+
+
+ggplotly(pheno_all_filter1 %>%
+           filter(index=="pctG" & missing_filter == "keep" & filter_manual =="keep") %>%
+           ggplot(., aes(datetime, value, color=factor(Sample)))+
+           geom_point(size=0.5)+
+           geom_line()+
+           facet_grid(Site~Type)+
+           labs(y="percent green"))
+
 # graph by Site and Crust type with missing filter removed
 pheno_all_filter1 %>%
-  filter(index=="pctG" & missing_filter == "keep") %>%
+  filter(index=="pctG" & missing_filter == "keep"  & filter_manual =="keep") %>%
   ggplot(., aes(datetime, value, color=factor(Sample)))+
   geom_point(size=0.5)+
   geom_line()+
   facet_grid(Site~Type)+
   labs(y="percent green")
 
+# graph the hourly pattern by camera
+cam.pick <- "charlie"
+pheno_all_filter1 %>%
+           filter(index=="pctG" & missing_filter == "keep" & filter_manual =="keep"&camera==cam.pick) %>%
+           ggplot(., aes(hour(datetime), value, color=factor(Sample)))+
+           geom_point(size=0.5)+
+           geom_line()+
+           facet_wrap(.~date(datetime))+
+           labs(y="percent green")
 
 # calculate mean by site and crust type
 gcc.mean <-pheno_all_filter1 %>%
-  filter(index=="pctG" & missing_filter == "keep") %>%
+  filter(index=="pctG" & missing_filter == "keep"  & filter_manual =="keep") %>%
   group_by(date,Site, Type)%>%
   summarise(gcc.mean = mean(value, na.rm=TRUE),
             gcc.sd = sd(value, na.rm=TRUE), 
@@ -462,6 +526,37 @@ pheno_all_remove_img <- pheno_all_filter1 %>%
   filter(missing_filter == "remove") %>%
   distinct(img)
 
+# save as "ImageFilter_AllCamera_VisualImageCheck.csv" to ./Phenoanalyzer folder
+
+# save data with missing_filter == "keep"  & filter_manual =="keep"
+# save all indices and pctG only
+
+pheno_all_analysis <- pheno_all_filter1 %>%
+  filter(missing_filter == "keep"  & filter_manual =="keep")%>%
+  select(img,datetime,year,month,day,hour,minute,camera,ROI,Sample,Site,Type,Water,Rep,colorspace,index,value)
+
+pheno_all_analysis_pctg <- pheno_all_filter1 %>%
+  filter(index=="pctG" & missing_filter == "keep"  & filter_manual =="keep") %>%
+  select(img,datetime,year,month,day,hour,minute,camera,ROI,Sample,Site,Type,Water,Rep,colorspace,index,value)
 
 
+# graph to check
+pheno_all_analysis %>%
+  filter(index=="pctG") %>%
+  ggplot(., aes(datetime, value, color=factor(Sample)))+
+  geom_point(size=0.5)+
+  geom_line()+
+  facet_grid(Site~Type)+
+  labs(y="percent green")
+
+pheno_all_analysis_pctg %>%
+  ggplot(., aes(datetime, value, color=factor(Sample)))+
+  geom_point(size=0.5)+
+  geom_line()+
+  facet_grid(Site~Type)+
+  labs(y="percent green")
+
+# save to ./PhenoAnalyzer
+# write.table(pheno_all_analysis, "PhenoAnalyzer_Filtered_AllIndices.csv", sep=",",row.names=FALSE)
+# write.table(pheno_all_analysis_pctg, "PhenoAnalyzer_Filtered_pctG.csv", sep=",",row.names=FALSE)
 
